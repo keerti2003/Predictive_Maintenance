@@ -50,10 +50,8 @@ def tune_and_fit(clf,X,y,params,task):
         grid_model = GridSearchCV(clf, param_grid=params,cv=5, scoring=f2_scorer)
         grid_model.fit(X, y['Failure_Type'])
         
-    #print('Best params:', grid_model.best_params_)
     train_time = time.time()-start_time
     mins = int(train_time//60)
-    #print('Training time: '+str(mins)+'m '+str(round(train_time-mins*60))+'s')
     return grid_model
 
 def predict_and_evaluate(fitted_models,X,y_true,clf_str,task):
@@ -83,27 +81,20 @@ def train_model(csv_file,model_filename):
     features = [col for col in df.columns if df[col].dtype=='float64' or col =='Type']
     target = ['Target','Failure_Type']
     idx_RNF = df.loc[df['Failure_Type']=='Random Failures '].index
-    # df.loc[idx_RNF,target]
-
-    #first_drop = df.loc[idx_RNF,target].shape[0]
-    #print('Number of observations where RNF=1 but Machine failure=0:',first_drop)
+    
     df.drop(index=idx_RNF, inplace=True)
 
     idx_ambiguous = df.loc[(df['Target']==1) & (df['Failure_Type']=='No Failure ')].index
-    # second_drop = df.loc[idx_ambiguous].shape[0]
-    #print('Number of ambiguous observations:', second_drop)
+   
 
     df.drop(index=idx_ambiguous, inplace=True)
 
-    #print('Global percentage of removed observations:',(100*(first_drop+second_drop)/n))
+    
     df.reset_index(drop=True, inplace=True)   # Reset index
     n = df.shape[0]
-    #print(df.describe())
+    
     num_features = [feature for feature in features if df[feature].dtype=='float64']
-    # idx_fail = df.loc[df['Failure_Type'] != 'No Failure '].index
-    # df_fail = df.loc[idx_fail]
-    # df_fail_percentage = 100*df_fail['Failure_Type'].value_counts()/df_fail['Failure_Type'].shape[0]
-    #print('Failures percentage in data:',round(100*df['Target'].sum()/n,2))
+    
     n_working = df['Failure_Type'].value_counts()['No Failure ']
     desired_length = round(n_working/0.8)
     spc = round((desired_length-n_working)/4)  #samples per class
@@ -114,12 +105,6 @@ def train_model(csv_file,model_filename):
                     'Tool Wear Failure ':spc}
     sm = SMOTENC(categorical_features=[0,7], sampling_strategy=balance_cause, random_state=0)
     df_res, y_res = sm.fit_resample(df, df['Failure_Type'])
-
-    # idx_fail_res = df_res.loc[df_res['Failure_Type'] != 'No Failure '].index
-    # df_res_fail = df_res.loc[idx_fail_res]
-    # fail_res_percentage = 100*df_res_fail['Failure_Type'].value_counts()/df_res_fail.shape[0]
-    #print('Percentage increment of observations after oversampling:',round((df_res.shape[0]-df.shape[0])*100/df.shape[0],2))
-    #print('SMOTE Resampled Failures percentage:',round(df_res_fail.shape[0]*100/df_res.shape[0],2))
     
     sc = StandardScaler()
     type_dict = {'L': 0, 'M': 1, 'H': 2}
@@ -136,20 +121,6 @@ def train_model(csv_file,model_filename):
     X, y = df_pre[features], df_pre[['Target','Failure_Type']]
     X_trainval, X_test, y_trainval, y_test = train_test_split(X, y, test_size=0.1, stratify=df_pre['Failure_Type'], random_state=0)
     X_train, X_val, y_train, y_val = train_test_split(X_trainval, y_trainval, test_size=0.11, stratify=y_trainval['Failure_Type'], random_state=0)
-
-    #lr = LogisticRegression(random_state=0,multi_class='ovr')
-    # lr.fit(X_train, y_train['Failure_Type'])
-    # y_val_lr = lr.predict(X_val)
-    # y_test_lr = lr.predict(X_test)
-    # cm_val_lr, metrics_val_lr = eval_preds(lr,X_val,y_val,y_val_lr,'multi_class')
-    # cm_test_lr, metrics_test_lr = eval_preds(lr,X_test,y_test,y_test_lr,'multi_class')
-    #print('Validation set metrics:',metrics_val_lr, sep='\n')
-    #print('Test set metrics:',metrics_test_lr, sep='\n')
-
-    # cm_lr = [cm_val_lr, cm_test_lr]
-    # cm_labels = ['No Fail','PWF','OSF','HDF','TWF']
-    # odds_df = pd.DataFrame(data = np.exp(lr.coef_), columns = X_train.columns,index = df_res['Failure_Type'].unique())
-    # odds_df
 
     lr = LogisticRegression(random_state=0,multi_class='ovr')
     knn = KNeighborsClassifier()
@@ -174,10 +145,9 @@ def train_model(csv_file,model_filename):
                 'objective':['multi:softprob']}
     params = pd.Series(data=[lr_params,knn_params,svc_params,rfc_params,xgb_params],index=clf)
 
-    #print('GridSearch start')
+
     fitted_models_multi = []
     for model, model_name in zip(clf, clf_str):
-        #print('Training '+str(model_name))
         fit_model = tune_and_fit(model,X_train,y_train,params[model],'multi_class')
         fitted_models_multi.append(fit_model)
 
@@ -210,9 +180,7 @@ def predict(csv_file, model_filename):
 
     data['Tool_wear'] = data['Tool_wear'].astype('float64')
     data['Rotational_speed'] = data['Rotational_speed'].astype('float64')
-    #data['ProductID'] = data['ProductID'].apply(lambda x: x[1:])
-    #data['ProductID'] = pd.to_numeric(data['ProductID'])
-
+    
     df = data.copy()
     df.drop(columns=['UDI','ProductID'], inplace=True)
 
@@ -229,7 +197,6 @@ def predict(csv_file, model_filename):
 
     df_pre = df.copy()
     df_pre['Type'].replace(to_replace=type_dict, inplace=True)
-    #df_pre['Failure_Type'].replace(to_replace=cause_dict, inplace=True)
     df_pre[num_features] = sc.fit_transform(df_pre[num_features]) 
 
     # Load the saved model
